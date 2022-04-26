@@ -1,67 +1,62 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
-
-
-```
-apt-get update
-apt-get install net-tools
-```
-
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
-
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
+자바 애플리케이션의 패키징
+터미널을 열어서 order 와 delivery, gateway 폴더로 각각 이동하여 아래 명령어를 실행한다.
+cd shopmall
 cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+mvn package -B -Dmaven.test.skip=true
+target 폴더에 jar 파일이 생성이 되었는지 확인한다.
+java -jar target/order-0.0.1-SNAPSHOT.jar
+명령으로 실행이 가능한지 확인한다.
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+ctrl+c 를 눌러서 jar 실행에서 빠져 나온다.
+도커라이징
+order 와 delivery, gateway 의 최상위 root 에 Dockerfile 이 있는지 확인 한다.
+Dockerfile 파일이 있는 경로에서 아래 명령을 실행 한다.
+ docker login
+ docker build -t [dockerhub ID]/order:[오늘날짜] .     
+ docker images
+ docker push [dockerhub ID]/order:[오늘날짜]  
+클러스터에 배포
+yaml 파일로 배포
+order/kubernetes 폴더내의 deployment.yaml을 오픈한다.
+image: 부분을 push 한 이미지 명으로 수정한다: [dockerhub ID]/order:[오늘날짜]
+저장후, 다음명령:
+kubectl apply -f kubernetes/deployment.yml
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+kubectl apply -f kubernetes/service.yml
+명령으로 배포 (비추)
+order 서비스 배포
 
-##### 상세설명
+kubectl create deploy order --image=[dockerhub ID]/order:latest
+kubectl expose deploy order --port=8080
+delivery 서비스 배포
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+kubectl create deploy delivery --image=[dockerhub ID]/delivery:latest
+kubectl expose deploy delivery --port=8080
+gateway 서비스 배포
+kubectl create deploy gateway --image=[dockerhub ID]/gateway:latest
+kubectl expose deploy gateway --type=LoadBalancer --port=8080
+서비스 확인
+게이트웨이 주소 확인
+
+kubectl get svc
+Pod 생성 확인
+
+kubectl get po
+주문 확인
+
+http [gateway IP]:8080/orders
+http [gateway IP]:8080/orders productId=1 productName="TV" qty=3
+잘 안될때
+쿠버네티스 객체 들이 이미 존재하는 경우, 다음을 통하여 객체들을 제거:
+kubectl delete deploy --all
+kubectl delete svc --all
+더 많은 테스트
+kubectl delete po --all
+# 한후, 서비스 접속 -> 좀있다가 회복
+kubectl get po   # po가 다시 생성되었음을 확인
+
+kubectl scale deploy order --replicas=3
+kubectl get po 
+# order를 위한 pod가 3개가 생성됨을 확인
+상세설명

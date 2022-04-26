@@ -1,67 +1,49 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+Kafka 수동 커밋
+Kafka 커밋모드
+Kafka default 커밋모드는 autoCommit 이다.
+Kafka 커밋모드가 auto(default) 일 때 Partition이 증가해 Rebalancing이 발생하면 커밋되지 않은 Message들은 자칫 컨슈머가 다시 Subscribe하여 중복처리할 수도 있다.
+Kafka 커밋모드 변경
+autoCommit 설정을 false로 변경하여 수동커밋 모드로 변경한다.
 
+Product 마이크로서비스 application.yml 화일의 cloud.stream.kafka 하위의 설정을 주석해제하고 저장한다.
 
-```
-apt-get update
-apt-get install net-tools
-```
-
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
-
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
+bindings:
+  event-in:
+    consumer:
+      autoCommitOffset: false 
+Order와 Product 마이크로서비스를 기동한다.
 cd order
 mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+cd product
+mvn spring-boot:run
+현재, kafkatest 토픽의 파티션이 2개이므로, 실행한 Product 서비스 Console에 2개의 파티션이 할당되었음을 볼 수 있다.
+partitions assigned: [kafkatest-0, kafkatest-1]
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
+Lag 확인
+Order 서비스에 포스팅하여 Kafka Event를 발행한다.
+http POST :8081/orders message=1st-Order
+http POST :8081/orders message=2nd-Order
+Product 마이크로서비스는 메시지를 소모(처리)했음에도 불구하고 Partition에서의 OffSet이 증가하지 않아 Lagging이 발생하고 있다.
+Partition Lagging 확인
+$kafka_home/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group product --describe
+Manual Commit
+Product 서비스에서 수동으로 ACK를 날려 Manual Commit을 해준다.
+Product 서비스의 PolicyHandler.java에서 아래 메서드의 블럭주석을 해제하고 기존 메서드를 블럭주석 처리한다.
+@StreamListener(KafkaProcessor.INPUT)
+    public void wheneverOrderPlaced_PrintMessage(@Payload OrderPlaced orderPlaced, @Header(KafkaHeaders.ACKNOWLEDGMENT) Acknowledgment acknowledgment) {
+
+        System.out.println("Entering listener: " + orderPlaced.getId());
+        System.out.println("Entering listener: " + orderPlaced.getMessage());
+
+        acknowledgment.acknowledge();
+
     }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
-
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
-
-##### 상세설명
-
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+Product 마이크로서비스를 재시작한다.
+Console 로그를 조회하면 메시지가 재처리한 것이 확인된다.
+Order 서비스에 포스팅하여 Kafka Event를 추가 발행한다.
+http POST :8081/orders message=3rd-Order
+http POST :8081/orders message=4th-Order
+Lag 확인
+Partition Lagging을 재확인하면 이제는 Lagging이 확인되지 않는다.
+$kafka_home/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group product --describe

@@ -1,67 +1,60 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+Composite 서비스에 의한 데이터 통합
+개요 참조
 
+http://www.msaschool.io/operation/integration/integration-five/
+주문,상품,배송 서비스를 모두 기동한다.
 
-```
-apt-get update
-apt-get install net-tools
-```
-
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
-
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
+터미널 3개를 열어서 각각의 프로젝트로 이동한 후, run을 실행한다.
+주문서비스 기동(8081)
+cd reqres_orders
 mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+상품서비스 기동(8085)
+cd reqres_products
+mvn spring-boot:run
+배송서비스 기동(8082)
+cd reqres_delivery
+mvn spring-boot:run
+1개의 주문을 생성한다.
+http localhost:8081/orders productId=1 quantity=1 customerId="1@uengine.org"
+composite_service 서비스를 기동(8088) 한다.
+cd composite_service
+mvn spring-boot:run
+CompositeService.java 파일의 getOrderByCustomerId 메서드 내용을 파악한다.
+getOrderByCustomerId 메서드안에서 3개의 서비스를 모두 호출하고, 데이터를 수집하여 보여준다.
+http localhost:8088/composite/orders/1@uengine.org
+장애전파 확인
+주문,배송,상품중 1개의 서비스라도 동작을 안하게 되면 에러가 발생한다.
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+3개중 1개의 서비스에서 호출이 늦어지면 전체 조회는 늦어진다.
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+reqres_products 서비스의 ProductController.java 파일의 productStockCheck 을 확인 한다.
+thread.sleep 부분을 주석 해제 한 후, reqres_products 서비스를 재시작한다.
+한개의 서비스가 0.5초 느려졌지만 컴포지트 서비스를 통하여 데이터를 가져오는 api도 전파된 시간만큼 느려진다.
+단점 경험 정리
+주문, 배송, 상품 서비스가 모두 가동중이어야 데이터 조회가 된다.
+주문이력이 많을시에 모든 데이터를 조회 하기때문에 시간이 많이 걸린다.
+각 호출 API 별로 return 되는 data 를 알고 있어야 한다. ( 각 서비스에서 변경시 잦은 변경 요청)
+1개의 서비스에서 호출이 늦어지면 전체 조회는 늦어진다.
+Service Clear
+다음 Lab을 위해 기동된 모든 서비스 종료
+808x의 모든 Process Kill
+kill -9 `netstat -lntp|grep 808|awk '{ print $7 }'|grep -o '[0-9]*'`
+구현관련 시사점
+HATEOAS 링크: 각 주문건에 대한 배송정보를 links.delivery.href 로 제공해줄 수 있도록 하기 위한 구현:
+order의 config/Config.java
+	@Bean
+	public ResourceProcessor<Resource<Order>> orderProcessor() {
 
-##### 상세설명
+		return new ResourceProcessor<Resource<Order>>() {
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+			@Override
+			public Resource<Order> process(Resource<Order> resource) {
+
+				resource.add(new Link("/deliveries/search/findByOrderIdOrderByDeliveryIdDesc?orderId=" + resource.getContent().getId(), "delivery"));
+				return resource;
+			}
+		};
+	}
+참고: Graph QL in Java Spring
+https://www.baeldung.com/spring-graphql

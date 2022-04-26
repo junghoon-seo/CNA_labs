@@ -1,67 +1,45 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+Kafka 스케일링
+Kafka Partition vs. Consumers
+Kafka Topic 생성시, default partition은 1개로 생성된다.
 
+kafka에서 하나의 Partition은 반드시 하나의 Consumer가 매칭되어 메시지를 소비한다.
 
-```
-apt-get update
-apt-get install net-tools
-```
+Partiton 수보다 동일한 Group id를 가진 Consumer 수가 많다면 일부 Consumer들은 partition에 binding되지 못해 message를 Polling 하지 못하는 현상이 일어난다.
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+아래의 Instruction을 따라 일부 Consumer가 메시지를 poll 해오지 못하는 현상을 확인한다.
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
+Order 서비스 시작
+
 cd order
 mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+Product1 서비스 시작
+cd product1
+mvn spring-boot:run
+Product2 서비스 시작
+cd product2
+mvn spring-boot:run
+Product1 서비스와는 달리 Product2 마이크로서비스의 Console 창을 통해 파티션 할당이 일어나지 않았음을 확인할 수 있다.
+partitions assigned: []
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+토픽정보와 Consumer 그룹정보를 확인한다.
+/usr/local/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --topic kafkatest --describe
+/usr/local/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group product
+Product Consumer가 2개임에도 파티션이 1개이므로, 매칭된 Consumer가 1개로 확인된다.
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+Kafka Partition Scale out
+Kafka Partition을 확장한다.
+$kafka_home/bin/kafka-topics.sh --zookeeper localhost:2181 --alter --topic kafkatest -partitions 2
+Product2 마이크로서비스를 재시작하거나 2~3분 정도 기다리면 Partition Rebalancing이 일어나면서 Product2 서비스도 partition assigned로 바뀌며 message를 Polling할 수 있는 상태로 변경된다.
 
-##### 상세설명
+토픽정보와 Consumer Group 정보를 재확인한다.
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+/usr/local/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --topic kafkatest --describe
+/usr/local/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group product
+Partition 0,1 각각에 Consumer가 매핑된 것을 확인할 수 있다.
+
+Order 서비스에 POST로 메시지를 발행하면 Product 1, Product 2 서비스가 차례로 메시지를 수신한다.
+http POST :8081/orders message=1st-Order
+http POST :8081/orders message=2nd-Order
+http POST :8081/orders message=3rd-Order
+http POST :8081/orders message=4th-Order

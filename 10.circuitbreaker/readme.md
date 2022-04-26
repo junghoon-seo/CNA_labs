@@ -1,67 +1,55 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+서킷브레이커를 통하여 장애 전파를 원천 차단
+서킷브레이커 설정 전 호출
+monolith 서비스와 reqres_delivery 서비스를 실행한다.
+부하 툴을 사용하여 주문을 넣어본다.
+siege -c2 -t10S  -v --content-type "application/json" 'http://localhost:8088/orders POST {"productId":2, "quantity":1}'
+서킷브레이커 설정
+monolith 서비스의 application.yaml 파일의 27 번째 라인의 주석을 해제한다.
 
 
-```
-apt-get update
-apt-get install net-tools
-```
+feign:
+  hystrix:
+    enabled: true
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+hystrix:
+  command:
+    # 전역설정
+    default:
+      execution.isolation.thread.timeoutInMilliseconds: 610
+reqres_delivery 서비스의 Delivery.java 에 강제 딜레이 발생 코드를 넣는다.
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+(49~53 line 주석해제)
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
+    try {
+        Thread.currentThread().sleep((long) (400 + Math.random() * 220));
+    } catch (InterruptedException e) {
+        e.printStackTrace();
     }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+monolith 서비스와 reqres_delivery 서비스를 종료하고 재실행한다.
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+부하 툴을 사용하여 주문을 넣어본다.
 
-##### 상세설명
+siege -c2 -t10S  -v --content-type "application/json" 'http://localhost:8088/orders POST {"productId":2, "quantity":1}'
+fallback 처리를 하여 유연하게 대처
+reqres_delivery 서비스가 중지된 상태로 주문을 넣어본다. ( 500 에러 )
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+http localhost:8088/orders productId=1 quantity=3
+monolith 서비스의 DeliveryService.java 의 FeignClient에 fallback 옵션을 준다.
+
+@FeignClient(name ="delivery", url="${api.url.delivery}", fallback = DeliveryServiceImpl.class)
+monolith 서비스를 재실행 후 주문을 넣어본다. ( 주문 가능 )
+
+이때 배송 서비스는 중지 상태 이어야 한다.
+DeliveryServiceImpl 의 startDelivery 메서드가 실행되는 것을 확인 할 수 있다.
+checkpoint 체크 방법
+fallback 처리 여부를 확인 하기 위하여 monolith 서비스의 console 창을 선택하고, 상단메뉴의 labs > 결과제출 을 클릭하여 제출한다.
+
+다른 Circuit Breaker 들
+https://dzone.com/articles/comparing-envoy-and-istio-circuit-breaking-with-ne?fbclid=IwAR0wYnXPiAZSVtluJ-17Ywb9dK3xrytAMo3ImIZv8KwoOo2WGGnyTKm6c04
+
+Service Clear
+다음 Lab을 위해 기동된 모든 서비스 종료
+fuser -k 8088/tcp
+fuser -k 8082/tcp
+상세설명

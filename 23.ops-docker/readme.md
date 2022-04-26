@@ -1,67 +1,159 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+도커 이미지 무작정 따라해 보기
+이미지 기반 컨테이너 생성
+docker image ls
+docker run --name my-nginx -d -p 8080:80 nginx
+docker run --name my-new-nginx -d -p 8081:80 nginx
+
+docker image ls
+docker container ls   # = docker ps
+서비스 확인
+
+Cloud IDE 메뉴 Labs > 포트열기 > 8080
+Cloud IDE 메뉴 Labs > 포트열기 > 8081
+httpie 로 확인
+
+http :8080
+http :8081
+컨테이너와 이미지 삭제하기
+삭제하려는 이미지를 사용하는 컨테이너 정리가 우선
+docker container ls ; 실행중인 컨테이너 확인
+docker container stop my-nginx  #docker stop <containerid>
+docker container stop my-new-nginx
+docker container rm my-nginx
+docker container rm my-new-nginx
+docker image rm nginx
+docker images
+한번에 삭제:
+docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q)
+이미지 생성
+어플리케이션 및 이미지 빌드 스크립트(Dockerfile) 생성
+Cloud IDE 메뉴 > File > Folder > Docker 입력
+생성한 폴더 하위에 아래 2개 파일 생성
+Cloud IDE 메뉴 > File > New File > index.html 입력
+파일 내용에
+   <h1> Hi~ My name is Hong Gil-Dong...~~~ </h1>
+입력 후 저장
+Cloud IDE 메뉴 > File > New File > Dockerfile (확장자 없음)
+파일 내용에
+    FROM nginx
+    COPY index.html /usr/share/nginx/html/
+입력 후, 저장
+
+이미지 빌드하기
+
+docker build -t apexacme/welcome:v1 .
+docker images
+docker run -p 8080:80 apexacme/welcome:v1
+이미지 Remote Registry(Hub.docker.com)에 푸시하기
+도커허브 계정 생성
+https://hub.docker.com 접속
+가입(Sign-Up) 및 E-Mail verification 수행
+docker login 
+docker push apexacme/welcome:v1
+# apexacme 가 자신의 계정명인 경우
+주의사항: access denied 오류가 나면, 로그인이 되지 않았거나, apexacme 를 자신의 계정명으로 저장소 명을 쓰지 않아서 입니다. e.g. apexacme --> 자신의 계정명
+
+Docker Hub에 생성된 이미지 확인
+https://hub.docker.com 접속
+repositories 메뉴 Reload 후 Push된 이미지 확인
+Docker Hub 이미지 기반 컨테이너 생성
+docker image rm apexacme/welcome:v1
+docker run --name=welcome -d -p 8080:80 apexacme/welcome:v1
+서비스가 잘 기동 되었는지 확인:
+새 터미널을 열고 (Menu > Terminal > New Terminal)
+$ http localhost:8080
+
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Connection: keep-alive
+Content-Length: 23
+Content-Type: text/html
+Date: Wed, 12 May 2021 05:12:28 GMT
+ETag: "609b5cd7-17"
+Last-Modified: Wed, 12 May 2021 04:43:03 GMT
+Server: nginx/1.19.10
+
+<h1> Hello world </h1>
+다음과정 미리보기
+$ kubectl run myhomepage --image=jinyoung/welcome:v1
+
+deployment.apps/myhomepage created
 
 
-```
-apt-get update
-apt-get install net-tools
-```
+$ kubectl expose deploy myhomepage --port=80 --type=LoadBalancer
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+service/myhomepage exposed
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+$ kubectl get svc -w
+NAME         TYPE           CLUSTER-IP      EXTERNAL-IP                                                                   PORT(S)        AGE
+myhomepage   LoadBalancer   10.100.98.191   addef84b932ff416186e2166ff397d74-589148294.ap-northeast-2.elb.amazonaws.com   80:30271/TCP   9s
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
 
-##### 상세설명
+$ http addef84b932ff416186e2166ff397d74-589148294.ap-northeast-2.elb.amazonaws.com:80
+HTTP/1.1 200 OK
+Accept-Ranges: bytes
+Connection: keep-alive
+Content-Length: 23
+Content-Type: text/html
+Date: Wed, 12 May 2021 05:36:40 GMT
+ETag: "609b5cd7-17"
+Last-Modified: Wed, 12 May 2021 04:43:03 GMT
+Server: nginx/1.19.10
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+<h1> Hello world </h1>
+
+
+kubectl get all
+NAME                              READY   STATUS    RESTARTS   AGE
+pod/myhomepage-58dd9ffb74-kw5km   1/1     Running   0          17m
+
+NAME                 TYPE           CLUSTER-IP      EXTERNAL-IP                                                                   PORT(S)        AGE
+service/myhomepage   LoadBalancer   10.100.98.191   addef84b932ff416186e2166ff397d74-589148294.ap-northeast-2.elb.amazonaws.com   80:30271/TCP   15m
+
+NAME                         READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/myhomepage   1/1     1            1           17m
+
+NAME                                    DESIRED   CURRENT   READY   AGE
+replicaset.apps/myhomepage-58dd9ffb74   1         1         1       17m
+
+
+$ kubectl get rs -w
+NAME                    DESIRED   CURRENT   READY   AGE
+myhomepage-58dd9ffb74   1         1         1       27m
+
+
+
+#### 새 터미널
+
+$ kubectl delete po --all
+
+pod "myhomepage-58dd9ffb74-wjf68" deleted
+
+
+
+### 아까 터미널에서 rs 의 desired 와 current 가 유지됨 (pod 가 재생됨)을 확인:
+
+myhomepage-58dd9ffb74   1         0         0       28m
+myhomepage-58dd9ffb74   1         1         0       28m
+myhomepage-58dd9ffb74   1         1         1       28m
+
+
+Github Container Registry 사용하기
+Login
+docker login ghcr.io -u <github계정명> -p <Personal Access Token>
+github 계정명은 이메일주소가 아닌 github 자체 계정 문자열입니다.
+Personal Access Token을 얻으려면, Account > Settings > Developer Settings > Personal Access Token 에서 Generate New Token 한후, 권한으로 “write package” 를 부여하신 후 생성된 토큰을 얻으면 됩니다.
+Build / Push예시
+docker build -t ghcr.io/jinyoung/welcome:v2021101202 .
+
+docker push ghcr.io/jinyoung/homepage:v2021101202
+build 시 이미지명은 앞에 꼭 ghcr.io/를 추가
+push 시에는 항상 동일한 이미지명 준수
+이미지 확인 및 접근권한설정
+Account > Your Repositories > Packages 에서 확인가능
+
+권한을 설정하기 위해서는 Setting package 를 클릭한 후, Set Visibility 를 클릭하고 팝업에서 Public 설정 후, 이름을 확인해주고 설정완료.
+
+상세설명

@@ -1,67 +1,42 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+Keycloak, JWT기반 OAuth2 - Resource Server
+OAuth2 Resource Server 설정
+주문 마이크로서비스를 Resource Server로 설정한다.
+Gateway로부터 JWT Token을 전달받아 클레임에 포함된 User Role기반의 Fine grained한 ACL을 적용한다.
+Platform에서 작업이 원활히지 않을 경우, Local에서 수행한다.
+Local 머신에 IDE(IntelliJ, VSCode)와 JDK 11 이상이 설치되어 있어야 한다.
 
+OAuth2 Resource Server 설정
+Order 마이크로서비스의 pom.xml을 통해 Resource Server 설정에 필요한 라이브러리(oauth2-resource-server)를 확인한다.
+application.yml에 oauth2-resource-server 설정을 주입한다.
+application.yml을 열어 주석 부분을 해제한다.
+#  security:
+#    oauth2:
+#      resourceserver:
+#        jwt:
+#          jwk-set-uri: http://localhost:8080/realms/my_realm/protocol/openid-connect/certs
+12행과 같이 keycloak Endpoint 정보는 Realm에서 OIDC 링크를 통해 확인 가능하다.
 
-```
-apt-get update
-apt-get install net-tools
-```
+image
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+Resource Server Security Configuration
+security 패키지의 ResourceSecurityConfig.java 파일을 열어 기본 설정을 확인한다.
+메소드 레벨의 Spring security를 적용하기 위해 @EnableGlobalMethodSecurity을 설정한다.
+Gateway로부터 전달받은 JWT 토큰으로부터 Claim을 추출하여 Spring security에 Injection한다.
+메소드 레벨 Fine grained Role 적용
+Order 서비스의 Controller.java를 열어 Role 설정을 확인한다.
+javax.annotation.security.RolesAllowed 를 활용해 메소드 레벨 ACL을 적용한다.
+Spring Security의 @Secured 로도 제어 가능하다.
+Keycloak > JWT Claim > Spring Security로 전달되었다.
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
-
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
-
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
-
-##### 상세설명
-
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+Order 서비스 메소드 레벨 ACL 테스트
+브라우저로 http://localhost:8088에 접속한다.
+접속 후, 인증한 User의 Role에 따른 응답을 확인해 본다.
+http://localhost:8088/orders
+http://localhost:8088/orders/placeAnOrder
+http://localhost:8088/orders/orderManage
+Service Clear
+다음 Lab을 위해 기동된 모든 서비스 종료
+fuser -k 8080/tcp
+fuser -k 8081/tcp
+fuser -k 8088/tcp

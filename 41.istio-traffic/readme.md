@@ -1,67 +1,124 @@
+## Traffic Mgmt & Canary 배포
 
+>Instruction
 
-
-# [구현] 마이크로서비스의 실행
-
-
-Instruction
-> 누락된 유틸리티 설치
-
-
+### Istio Tutorial 셋업
+* Git repository에서 Tutorial 리소스 가져오기
 ```
-apt-get update
-apt-get install net-tools
+cd /home/project
+git clone https://github.com/redhat-developer-demos/istio-tutorial
+cd istio-tutorial
+```
+### 네임스페이스 생성
+```
+kubectl create namespace tutorial
+```
+### Customer Service 배포 생성확인
+```
+kubectl apply -f <(istioctl kube-inject -f customer/kubernetes/Deployment.yml) -n tutorial
+kubectl describe pod (Customer Pod) -n tutorial
+kubectl create -f customer/kubernetes/Service.yml -n tutorial
+```
+### Istio Gateway 설치 및 Customer 서비스 라우팅(VirtualService) 설정
+```
+cat customer/kubernetes/Gateway.yml
+kubectl create -f customer/kubernetes/Gateway.yml -n tutorial
+```
+### Istio-IngressGateway를 통한 Customer 서비스 확인
+```
+kubectl get service/istio-ingressgateway -n istio-system
+```
+* 해당 EXTERNAL-IP가 Istio Gateway 주소
+* Customer 서비스 호출
+```
+http://(istio-ingressgateway IP)/customer
+```
+### Preference, Recommendation-v1 Service 배포
+```
+kubectl apply -f <(istioctl kube-inject -f preference/kubernetes/Deployment.yml) -n tutorial
+kubectl create -f preference/kubernetes/Service.yml -n tutorial
+kubectl apply -f <(istioctl kube-inject -f recommendation/kubernetes/Deployment.yml) -n tutorial
+kubectl create -f recommendation/kubernetes/Service.yml -n tutorial
+```
+### Istio - Traffic Routing
+* Simple Routing
+pwd 로 현 위치가 /istio-tutorial/ 인지 확인
+recommendation 서비스 추가 배포: v2
+```
+kubectl apply -f <(istioctl kube-inject -f recommendation/kubernetes/Deployment-v2.yml) -n tutorial
+```
+### 서비스 호출
+* 브라우저에서 Customer 서비스(Externl-IP:8080 접속) 호출
+* F5(새로고침)를 10회 이상 클릭하여 다수의 요청 생성
+* Routing 결과 확인 - Kiali(Externl-IP:20001)
+* 접속 서비스의 v2 의 replica 를 2로 설정
+```
+kubectl scale --replicas=2 deployment/recommendation-v2 -n tutorial
+kubectl get po -n tutorial
 ```
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+### Customer 서비스를 10회 이상 F5(새로고침)하여 서비스 호출
+* Routing 결과 확인 - Kiali(Externl-IP:20001) 접속
+* Advanced Routing
+* 정책(VirtualService, DestinationRule) 설정 확인
+```
+kubectl get VirtualService -n tutorial -o yaml
+kubectl get DestinationRule -n tutorial -o yaml
+```
+* 사용자 선호도에 따른 추천 서비스 라우팅 정책 설정
+* version-2로 100% 라우팅
+```
+kubectl create -f istiofiles/destination-rule-recommendation-v1-v2.yml -n tutorial
+kubectl create -f istiofiles/virtual-service-recommendation-v2.yml -n tutorial
+```
+* 설정정책 확인
+```
+kubectl get VirtualService -n tutorial -o yaml
+kubectl get DestinationRule -n tutorial -o yaml
+```
+* 서비스 확인
+브라우저에서 Customer 서비스(Externl-IP:8080 접속)호출
+Kiali(Externl-IP:20001), Jaeger(External-IP:80) 에서 모니터링
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
+### 가중치 기반 스마트 라우팅
+* recommendation 서비스 v1의 가중치를 100으로 변경
 ```
-cd order
-mvn spring-boot:run
+kubectl replace -f istiofiles/virtual-service-recommendation-v1.yml -n tutorial
 ```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+* 서비스 호출 및 Kiali(Externl-IP:20001)에서 모니터링
+VirtualService 삭제 시, Round-Robin 방식으로 동작
+```
+kubectl delete -f istiofiles/virtual-service-recommendation-v1.yml -n tutorial
+```
+### Canary 라우팅 비율별 배포 정책 예시
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
+(90 : 10)
 ```
-http localhost:8081/orders productId=1 productName="TV" qty=3
+kubectl apply -f istiofiles/virtual-service-recommendation-v1_and_v2.yml -n tutorial
 ```
-* 주문된 상품을 조회한다.
+(75 : 25)
 ```
-http localhost:8081/orders
+kubectl replace -f istiofiles/virtual-service-recommendation-v1_and_v2_75_25.yml -n tutorial
 ```
-* 주문된 상품을 수정한다.
+### 삭제
 ```
-http PATCH localhost:8081/orders/1 qty=10
+kubectl delete dr recommendation -n tutorial
+kubectl delete vs recommendation -n tutorial
+kubectl scale --replicas=1 deployment/recommendation-v2 -n tutorial
 ```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
+### Header 정보기반 라우팅(브라우저 유형별 예시)
+Firefox 브라우저로 접속 시, v2로 라우팅되도록 설정
 ```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
-
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
-
-##### 상세설명
-
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+kubectl apply -f istiofiles/destination-rule-recommendation-v1-v2.yml -n tutorial
+kubectl apply -f istiofiles/virtual-service-firefox-recommendation-v2.yml -n tutorial
+```
+Firefox 브라우저와 다른 브라우저에서 접속 확인 Browser 환경이 지원되지 않을 경우
+```
+curl -A Safari Externl-IP:8080
+curl -A Firefox Externl-IP:8080
+```
+### 삭제
+```
+kubectl delete dr recommendation -n tutorial
+kubectl delete vs recommendation -n tutorial
+```

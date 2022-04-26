@@ -1,28 +1,40 @@
-Instruction
-VueJS 프레임워크를 사용하기 위한 vue 유틸리티 명령어 설치
-npm install -g @vue/cli
-애플리케이션 생성
-vue create front-end
-옵션선택: Vue2 선택, 패키지 매니저를 npm 으로 설정하는 것을 제외한 나머지 옵션은 모두 Default 선택을 선택함:
-Package Manager: Use NPM
+> Instruction
+## VueJS 프레임워크를 사용하기 위한 vue 유틸리티 명령어 설치
 
-생성된 애플리케이션 살펴보기
+```
+npm install -g @vue/cli
+```
+
+### 애플리케이션 생성
+```
+vue create front-end
+```
+> 옵션선택: Vue2 선택, 패키지 매니저를 npm 으로 설정하는 것을 제외한 나머지 옵션은 모두 Default 선택을 선택함:<p>
+> Package Manager: Use NPM
+
+### 생성된 애플리케이션 살펴보기
+```
 cd front-end
 ls
-vuejs 파일(*.vue)들을 IDE 에서 읽기 쉽게 하기 위해 Extensions > “vuejs” 로 검색하면 플러그인을 설치할 수 있습니다.
+```
+> vuejs 파일(*.vue)들을 IDE 에서 읽기 쉽게 하기 위해 Extensions > “vuejs” 로 검색하면 플러그인을 설치할 수 있습니다.
 
-Vuetify UI Component 설치
+### Vuetify UI Component 설치
+```
 vue add vuetify
-Default 옵션으로 설치.
+```
+> Default 옵션으로 설치.
 
-애플리케이션의 빌드와 실행
+### 애플리케이션의 빌드와 실행
+```
 npm install
 npm run serve
-브라우저에서 열기
-Labs > 포트열기 > 8080 (혹은 다른 포트번호)
+```
+### 브라우저에서 열기
+* Labs > 포트열기 > 8080 (혹은 다른 포트번호)
 
-Invalid Host Header 오류를 제거하기 위하여 vue.config.js 에 devServer 블록을 추가:
-
+> Invalid Host Header 오류를 제거하기 위하여 vue.config.js 에 devServer 블록을 추가:
+```
 module.exports = {
   transpileDependencies: [
     'vuetify'
@@ -32,11 +44,12 @@ module.exports = {
     allowedHosts: "all",
   }
 }
+```
 
-상품목록을 만들기 위하여 Card 컴포넌트를 사용
-card 컴포넌트 사용 설명 URL: https://vuetifyjs.com/en/components/cards/
-샘플을 복사:
-
+### 상품목록을 만들기 위하여 Card 컴포넌트를 사용
+* card 컴포넌트 사용 설명 URL: https://vuetifyjs.com/en/components/cards/
+* 샘플을 복사:
+```
   <v-card
     :loading="loading"
     class="mx-auto my-12"
@@ -113,9 +126,11 @@ card 컴포넌트 사용 설명 URL: https://vuetifyjs.com/en/components/cards/
       </v-btn>
     </v-card-actions>
   </v-card>
+```
 
-App.vue 의 “HelloWorld” 태그를 복사한 내용으로 대체
-사용하지 않는 컴포넌트선언들을 주석처리하여 무력화:
+* App.vue 의 “HelloWorld” 태그를 복사한 내용으로 대체
+* 사용하지 않는 컴포넌트선언들을 주석처리하여 무력화:
+```
 <script>
 //import HelloWorld from './components/HelloWorld';
 
@@ -131,11 +146,15 @@ export default {
   }),
 };
 </script>
-상품목록을 위한 변수 선언
+```
+### 상품목록을 위한 변수 선언
+```
   data: () => ({
     products: []
   }),
-생성자에 상품 목록 얻어오는 로직 작성
+```
+### 생성자에 상품 목록 얻어오는 로직 작성
+```
 export default {
   name: 'App',
 
@@ -154,42 +173,55 @@ export default {
       this.products = temp.data._embedded.products;
   }
 }
-
-쇼핑몰 상품 정보 서비스를 호출하기 위해서 다음의 git 에서 코드를 다운받고 실행시켜야 합니다:
-
+```
+> 쇼핑몰 상품 정보 서비스를 호출하기 위해서 다음의 git 에서 코드를 다운받고 실행시켜야 합니다:
+```
 git clone https://github.com/event-storming/monolith.git
 cd monolith
 mvn spring-boot:run
-axios 라이브러리를 가져오기 위하여 다음 import 문장을 export default 상단에 추가:
+```
+> axios 라이브러리를 가져오기 위하여 다음 import 문장을 export default 상단에 추가:
 
+```
 const axios = require('axios').default;
-그래도 라이브러리가 없다고 나오면 터미널에서 다음을 실행 (front-end 의 디렉토리에서 실행)
+```
 
+> 그래도 라이브러리가 없다고 나오면 터미널에서 다음을 실행 (front-end 의 디렉토리에서 실행)
+```
 npm install axios
-화면 요소와 데이터의 바인딩 (MVVM)
-v-card 태그와 얻어온 product 데이터를 바인딩 합니다.
+```
 
+### 화면 요소와 데이터의 바인딩 (MVVM)
+* v-card 태그와 얻어온 product 데이터를 바인딩 합니다.
+```
  <v-card v-for="(product, index) in products" v-bind:key="index" 
  ...
-화면에 아까 존재하던 카드가 사라졌나요? 그렇다면 서버에 아직 product 상품이 존재하지 않기 때문입니다.
+```
+> 화면에 아까 존재하던 카드가 사라졌나요? 그렇다면 서버에 아직 product 상품이 존재하지 않기 때문입니다.
 
-상품 서비스 기동시키기
-새 터미널을 열고 monolith2micsvc 폴더의 monolith 프로젝트에 진입하여 백엔드를 기동시킵니다:
-
+### 상품 서비스 기동시키기
+* 새 터미널을 열고 monolith2micsvc 폴더의 monolith 프로젝트에 진입하여 백엔드를 기동시킵니다:
+```
 cd monolith2misvc/
 cd monolith
 mvn spring-boot:run
-상품서비스의 외부접속 주소를 얻기 위하여 Labs>포트열기>8081 (모놀리스 프로젝트의 포트번호) 를 통하여 브라우저에서 외부 주소를 확인합니다. 확인한 외부주소를 복사하여 앞서의 ajax 코드에 반영해줍니다:
+```
 
+> 상품서비스의 외부접속 주소를 얻기 위하여 Labs>포트열기>8081 (모놀리스 프로젝트의 포트번호) 를 통하여 브라우저에서 외부 주소를 확인합니다. <p>
+> 확인한 외부주소를 복사하여 앞서의 ajax 코드에 반영해줍니다:
+```
 var temp = await axios.get('http://8081-labs--1247012378.kuberman.io/products')
-화면을 리프래시 하여 상품개수만큼 리스트가 들어오는 것을 확인합니다
-상품 이름 표시하기
-상품이름을 어떻게 출력할 수 있을까요? vuejs 에서는 템플릿 html 내용에 {{변수명}} 를 사용하여 변수내용을 해당 위치에 표시할 수 있습니다.
+```
+* 화면을 리프래시 하여 상품개수만큼 리스트가 들어오는 것을 확인합니다
 
+### 상품 이름 표시하기
+* 상품이름을 어떻게 출력할 수 있을까요? vuejs 에서는 템플릿 html 내용에 {{변수명}} 를 사용하여 변수내용을 해당 위치에 표시할 수 있습니다.
+```
     <v-card-title>{{product.name}}</v-card-title>
-주문 목록으로 전환하기
-상품목록 대신 주문 목록을 표시하도록 전환해보겠습니다. 주문정보를 통해서 어떤 상품을 주문했는지와, 배송상태를 얻어와 하나의 카드에 같이 출력하도록 Lazy Loading 방식으로 UI 에서 각각의 다른 마이크로서비스에서의 데이터를 통합할 수 있습니다.
-
+```
+### 주문 목록으로 전환하기
+* 상품목록 대신 주문 목록을 표시하도록 전환해보겠습니다. 주문정보를 통해서 어떤 상품을 주문했는지와, 배송상태를 얻어와 하나의 카드에 같이 출력하도록 Lazy Loading 방식으로 UI 에서 각각의 다른 마이크로서비스에서의 데이터를 통합할 수 있습니다.
+```
   data: () => ({
     orders: []
   }),
@@ -208,10 +240,12 @@ async created() {
           order.__ob__.dep.notify()
       })
   }
-코드는 얻어온 주문의 목록에서 각 주문의 상품데이터를 다시 fetch 하여 객체에 담습니다. 주문정보에 상품정보가 보완이 되면, 그 때에 ob.notify() 에 의하여 객체의 변화가 MVVM 체계에 의하여 템플릿에 전달되어 변경된 주문 정보를 업데이트 하게 됩니다.
+```
 
-따라서 템플릿 부분도 아래와 같이 변경합니다:
+* 코드는 얻어온 주문의 목록에서 각 주문의 상품데이터를 다시 fetch 하여 객체에 담습니다. 주문정보에 상품정보가 보완이 되면, 그 때에 ob.notify() 에 의하여 객체의 변화가 MVVM 체계에 의하여 템플릿에 전달되어 변경된 주문 정보를 업데이트 하게 됩니다.
 
+* 따라서 템플릿 부분도 아래와 같이 변경합니다:
+```
 <v-card v-for="(order, index) in orders" v-bind:key="index"
     :loading="loading"
     class="mx-auto my-12"
@@ -230,10 +264,13 @@ async created() {
         {{order.product.name}}
       </div>
     </v-card-title >
-v-if 를 통하여 order.product 의 정보가 로딩되는 중일때는 progress bar 를 표시하고, 주문정보가 채워질때 비로소 상품이름을 표시함으로서 각 마이크로서비스의 호출결과가 도달하지 않더라도 주문의 기본 정보는 미리 표시해 둘 수 있습니다.
+```
 
-확장 실험
+* v-if 를 통하여 order.product 의 정보가 로딩되는 중일때는 progress bar 를 표시하고, 주문정보가 채워질때 비로소 상품이름을 표시함으로서 각 마이크로서비스의 호출결과가 도달하지 않더라도 주문의 기본 정보는 미리 표시해 둘 수 있습니다.
+
+### 확장 실험
 해당 주문에 대한 배송상태 정보도 같이 표시해보세요.
+---
 
 Order 를 위한 Vue Component 를 분리하시오
 VueJS 는 도메인 특화된 html 태그를 만들 수 있습니다. 이것은 유비쿼터스 랭귀지를 유지하여 비즈니스 피플과 개발자간의 커뮤니케이션을 유지하는 효과와 동시에 향후 컴포넌트의 재사용성과 간섭의 분리효과도 같이 높힐 수 있습니다. 주문에 대한 화면과 내부 정보를 채우는 로직을 “ShoppingOrder” 라고 하는 Vue Component 로 분리하여 html 태그로 간편하게 호출하여 어디서든 활용할 수 있도록 만들어 보겠습니다.

@@ -1,9 +1,13 @@
-Instruction
-Service Mesh Istio 모니터링
-Istio Addon 설치
+> Instruction
+## Service Mesh Istio 모니터링
+### Istio Addon 설치
+```
 cd istio-<istio-version>
 kubectl apply -f samples/addons
-Ingress 로 모니터링 도구들 expose
+```
+
+### Ingress 로 모니터링 도구들 expose
+```
 kubectl apply -f - <<EOF
 apiVersion: "extensions/v1beta1"
 kind: "Ingress"
@@ -53,15 +57,19 @@ spec:
               serviceName: grafana
               servicePort: 3000
 EOF
-ingress provider 가 없는경우
+```
 
+### ingress provider 가 없는경우
+```
 helm repo add stable https://charts.helm.sh/stable
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 kubectl create namespace ingress-basic
 
 helm install nginx-ingress ingress-nginx/ingress-nginx --namespace=ingress-basic
-서비스 접근을 위하여 hosts 파일을 변경:
+```
+
+### 서비스 접근을 위하여 hosts 파일을 변경:
 C:\Windows\System32\drivers\etc 내의 hosts 파일에 아래를 추가한다: (mac 과 linux 인 경우 /etc/hosts)
 
 <획득한 ingress의 External IP>  tracing.service.com, kiali.service.com, prom.service.com, gra.service.com

@@ -1,67 +1,166 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
-
-
-```
-apt-get update
-apt-get install net-tools
-```
-
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
-
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
+GraphQL로 백엔드 데이터 통합
+주문,상품,배송 서비스를 모두 기동한다.
+터미널 3개를 열어서 각각의 프로젝트로 이동한 후, run을 실행한다.
+주문서비스 기동(8081)
+cd reqres_orders
 mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+상품서비스 기동(8085)
+cd reqres_products
+mvn spring-boot:run
+배송서비스 기동(8082)
+cd reqres_delivery
+mvn spring-boot:run
+1개의 주문을 생성한다.
+http localhost:8081/orders productId=1 quantity=1 customerId="1@uengine.org"
+GraphQL 기동(8089)
+cd apollo_graphql
+npm install
+npm start
+GraphQL Playground
+작성한 GraphQL Type, Resolver 명세확인, 데이터 요청 및 테스트가 가능한 워크벤치
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
+Labs > 포트열기 > 8089로 WebUI에 접속
+서비스 조회
+전체 주문서비스
+query getOrders {
+  orders {
+    productId
+    productName
+    quantity
+    price
+  }
+}
+단일 주문서비스( id=1 주문서비스 )
+query getOrderById {
+  order(orderId: 1) {
+    productId
+    productName
+    quantity
+    price
+  }
+}
+복합 서비스 조회
+order 서비스의 연결된 product, delivery 정보조회
+query Query{
+  orders {
+    quantity
+    customerId
+    state
+    product {
+      price
+      name
     }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+    delivery {
+      deliveryAddress
+    }
+  }
+}
+GraphQL 파일 참고
+src/graphql/resolvers.js
+데이터를 가져오는 구체적인 과정을 구현
+서비스의 액션들을 함수로 지정, 요청에 따라 데이터를 반환(Query), Mutation(입력, 수정, 삭제) 하는 Query 또는 구현체 작성
+예시)
+const resolvers = {
+  //typeDefs의 객체 유형 정보(Order, Query, Product) 호출 선언
+  
+  Query: {
+     //...
+  } 
+  Order: {
+      deliveries: (root, args, {dataSources}) => {}
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+      //  함수명: (parent, args, context, info) => {}
+      //  * parent  : 루트에 대한 resolver의 반환 값.
+      //  * args    : 함수 호출시 args 또는 {parameter}으로 인자값.
+      //  * context : 
+            특정 작업을 위해 실행되는 모든 resolver에 전달되는 개체,
+            데이터베이스 연결과 같은 컨텍스트를 공유.
+          {dataSources}: xxx-rest-api.js와 연결된 데이터 호출.
+      //  * info    : 필드명, 루트에서 필드까지의 경로 등 작업의 실행 상태.
+  }
+}
+src/graphql/typeDefs.js
+GraphQL 명세서에서 사용될 데이터, 요청의 타입 (gql로 생성됨)
+Type Definitions
+객체 타입과 필드명 선언
+type Delivery {
+        id: Long!
+        orderId: Long 
+        productId: Long 
+        customerId: String 
+        deliveryAddress: String 
+        deliveryState: String 
+        orders: [Order]
+        order(orderId: Long): Order
+    }
+  
+    type Order {
+        id: Long! 
+        productId: Long
+        customerId: String
+        state: String
+        deliveries: [Delivery]
+        delivery(deliveryId: Long): Delivery
+    }
 
-##### 상세설명
+    // []: 배열
+    //  !: 필수값
+src/restApiServer/xxx-rest-api.js
+apollo-datasource-rest의 해당 서비스의 호출 함수및 호출 경로 설정.
+import {RESTDataSource} from 'apollo-datasource-rest';
+// apollo-datasource-rest 모듈
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+class orderRestApi extends RESTDataSource {
+    constructor() {
+        super();
+        this.baseURL = 'http://order:8080';
+        // 해당 서비스의 호출 주소 정보.
+    }
+
+    // 함수명() 
+    async getOrders() {
+        const data = await this.get('/orders', {})
+        // baseURL 이후 url 호출 정보.
+
+        var value = this.stringToJson(data);
+        // 호출정보 String to Json 으로 변경. 
+        
+        return value
+        // 호출 정보 리턴.
+    }
+
+    async getOrder(id) {
+        // ...
+    }
+
+    stringToJson(str){
+        if(typeof str == 'string'){
+            str = JSON.parse(str);
+        }
+        return str;
+    }
+}
+src/index.js
+선언부 호출 매핑및 선언.
+import {ApolloServer} from 'apollo-server';
+import resolvers from './graphql/resolvers.js';
+import typeDefs from './graphql/typeDefs.js';
+import orderRestApi from './restApiServer/order-rest-api.js'
+import deliveryRestApi from './restApiServer/delivery-rest-api.js'
+
+const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    dataSources: () => ({
+        orderRestApi: new orderRestApi(),
+        deliveryRestApi: new deliveryRestApi()
+    }),
+    // dataSources 선언 하여 xxxRestApi 호출정보.
+});
+
+server.listen({
+    port: 8089,
+}).then(({url}) => {
+    console.log(`🚀  Server ready at ${url}`);
+});

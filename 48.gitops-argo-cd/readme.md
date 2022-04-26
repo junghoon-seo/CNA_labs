@@ -1,67 +1,50 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+Argo CD 를 통한 배포
+Argo CD 의 홈페이지를 방문한다:
+https://argo-cd.readthedocs.io/en/stable/
+
+Getting Started 메뉴를 접속하여, argo cd 를 설치한다:
+
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+Argo CD UI 를 접속하기 위하여 LoadBalancer 로 전환한다:
+
+kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+
+Argo CD UI 의 External IP 주소를 획득한다
+
+kubectl get svc argocd-server -n argocd
+접속한다.
+
+Argo CD 는 기본 https 로 UI 서비스가 열리므로, 인증서가 없이 서비스를 열었으므로, 이를 그냥 접속하기 위해서 해당 페이지에서 허공에 대고 “thisisunsafe” 를 입력하면 다음과 같은 페이지로 넘어간다 ㅡㅡ;
 
 
-```
-apt-get update
-apt-get install net-tools
-```
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+접속 user id 는 admin 이고 password 는 다음과 같이 Secret 에서 얻어내어야 한다 (무슨 CD 툴이 왠 보안에 엄청 신경을):
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+왼쪽 메뉴에서 New App 을 클릭하여 Git 주소가 포함된 Application 정보를 등록한다:
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
 
-##### 상세설명
+Guestbook Application 을 등록한다:
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+
+
+https://github.com/argoproj/argocd-example-apps.git 를 접속한 후, 이를 Fork 한다.
+
+내 계정으로 복제된 guest book application 의 git 주소를 argo 에 등록한다.
+
+
+
+배포될 타겟 클러스터를 지정한다
+
+
+
+kubernetes.default.svc 가 내가 포함된 서비스의 기본 접속 주소이다.
+namespace 를 “guestbook” 으로 줘본다.
+
+git 에 변화를 주고, 이를 동기화 시켜서 반영이 되는지 확인한다:
+
+
+

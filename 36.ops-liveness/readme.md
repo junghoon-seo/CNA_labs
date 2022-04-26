@@ -1,67 +1,46 @@
-
-
-
-# [구현] 마이크로서비스의 실행
-
-
 Instruction
-> 누락된 유틸리티 설치
+셀프힐링 실습 (livenessProbe 설정)
+Pod는 정상적으로 작동하지만 내부의 어플리케이션이 반응이 없다면, 컨테이너는 의미가 없다.
+위와 같은 경우는 어플리케이션의 Deadlock 또는 메모리 과부화로 인해 발생할 수 있으며, 발생했을 경우 컨테이너를 다시 시작해야 한다.
+Liveness probe는 Pod의 상태를 체크하다가, Pod의 상태가 비정상인 경우 kubelet을 통해서 재시작한다.
 
+이번시간에는 특정 API 를 호출시 어플리케이션의 메모리 과부화를 발생시켜 서비스가 동작안하는 상황을 만든다.
+그 후 livenessProbe 설정에 의하여 자동으로 서비스가 재시작 되는 실습을 한다.
 
-```
-apt-get update
-apt-get install net-tools
-```
+선행과정
+메모리 릭을 유도하는 소스코드의 확인: shopmall/order/src/main/java/shopmall/OrderController.java
 
-> 제대로 설치된 경우 Labs > 포트확인 클릭하여 포트넘버 확인 가능해야 합니다.
+mvn 패키징을 통해서 애플리케이션을jar파일로 압축한다:
 
-### 생성된 마이크로 서비스들의 기동
-##### 터미널에서 mvn 으로 마이크로서비스 실행
-```
-cd order
-mvn spring-boot:run
-```
-##### IDE에서 실행
-* order 서비스의 Application.java 파일로 이동한다.
-* 14행과 15행 사이의 'Run’을 클릭 후, 5초 정도 지나면 서비스가 터미널 창에서 실행된다.
-* 새로운 터머널 창에서 netstat -lntp 명령어로 실행중인 서비스 포트를 확인한다.
+ mvn package -B
+애플리케이션을 도커허브나 플랫폼별 컨테이너 레지스트리에 order:memleak의 이름으로 push 한다
+e.g. ACR case:
+az acr build --registry user27 --image user27.azurecr.io/order:memleak .
+- shopmall > order > kubernetes 폴더로 이동하여 deployment.yaml 파일을 수정한다.
+- 19 Line 의 이미지명 부분을 생성한 이미지명으로 변경한다.
+- cd /home/project/ops-deploy-my-app/shopmall/order/kubernetes
+- kubectl apply -f deployment.yml
+- kubectl apply -f service.yaml
 
-##### 서비스 테스트
-* 기동된 order 서비스를 호출하여 주문 1건을 요청한다.
-```
-http localhost:8081/orders productId=1 productName="TV" qty=3
-```
-* 주문된 상품을 조회한다.
-```
-http localhost:8081/orders
-```
-* 주문된 상품을 수정한다.
-```
-http PATCH localhost:8081/orders/1 qty=10
-```
-##### IDE에서 디버깅
-1. OrderApplication.java 를 찾는다, main 함수를 찾는다.
-2. main 함수의 첫번째라인 (16) 의 왼쪽에 동그란 breakpoint 를 찾아 활성화한다
-3. main 함수 위에 조그만 "Debug"라는 링크를 클릭한다. (10초 정도 소요. 기다리셔야 합니다)
-4. 잠시후 디버거가 활성화되고, 브레이크 포인트에 실행이 멈춘다.
-5. Continue 라는 화살표 버튼을 클릭하여 디버거를 진행시킨다.
-6. 다음으로, Order.java 의 첫번째 실행지점에 디버그 포인트를 설정한다:
-```
-@PostPersist
-    public void onPostPersist(){
-        OrderPlaced orderPlaced = new OrderPlaced();  // 이부분
-        BeanUtils.copyProperties(this, orderPlaced);
-        orderPlaced.publishAfterCommit();
-    }
-```    
-1. 그런다음, 앞서 주문을 넣어본다
-2. 위의 Order.java 에 디버거가 멈춤을 확인한후, variables 에서 local > this 객체의 내용을 확인한다.
+- kubectl get po 실행하여 STATUS가 정상적으로 Running 상태 확인
+1. livenessProbe 확인
+1.1 터미널을 열어서 siege Pod 로 들어간 후 http 명령으로 주문서비스를 호출하여 정상작동하는지 확인한다.
 
-### 실행중 프로세스 확인 및 삭제
-netstat -lntp | grep :808 
-kill -9 <process id>
+kubectl exec -it siege -- /bin/bash
+http http://order:8080/orders	
+1.2 새로운 터미널을 열어서 Pod 의 변화를 살펴보기 위하여 watch 를 걸어놓는다
 
-##### 상세설명
+kubectl get po -w
+1.3 order 서비스의 OrderController.java 코드를 살펴보면 메모리를 강제로 부하시키는 코드를 호출한다. (callMemleak 호출)
 
-https://www.youtube.com/watch?v=gtBQ9WFAbUQ
-https://www.youtube.com/watch?v=J6yqEJrQUyk
+http http://order:8080/callMemleak
+1.4 watch 걸어놓은 pod 에서 pod 의 상태를 확인한다.
+
+RESTARTS 카운트가 증가하는 것을 확인 한다.
+root@labs--201094368:~# kubectl get po -w
+NAME                     READY   STATUS    RESTARTS   AGE
+order-684647ccf9-ltlqg   1/1     Running   0          80s
+siege                    1/1     Running   0          2m9s
+order-684647ccf9-ltlqg   0/1     OOMKilled   0          116s
+order-684647ccf9-ltlqg   0/1     Running     1          119s
+order-684647ccf9-ltlqg   1/1     Running     1          2m17s
